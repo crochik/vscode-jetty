@@ -13,11 +13,12 @@ import { JettyServer } from "./JettyServer";
 import { JettyServerModel } from "./JettyServerModel";
 import * as Utility from './Utility';
 import { WarPackage } from './WarPackage';
+import { SpawnOptions } from 'child_process';
 
 export class JettyServerController {
     private _outputChannel: vscode.OutputChannel;
     constructor(private _jettyServerModel: JettyServerModel, private _extensionPath: string) {
-        this._outputChannel =  vscode.window.createOutputChannel('vscode-jetty');
+        this._outputChannel = vscode.window.createOutputChannel('vscode-jetty');
     }
 
     public async addServer(): Promise<JettyServer> {
@@ -37,16 +38,25 @@ export class JettyServerController {
         }
         const existingServerNames: string[] = this._jettyServerModel.getServerSet().map((item: JettyServer) => { return item.name; });
         const serverName: string = await Utility.getServerName(installPath, this._jettyServerModel.defaultStoragePath, existingServerNames);
-        const jettyHome: string = path.join(installPath, 'start.jar');
-        const jettyBase: string = await Utility.getServerStoragePath(this._jettyServerModel.defaultStoragePath, serverName);
+
+        // TODO: check if the folder already exist, if so skip copying files
+        // ...
+        // const jettyBase: string = await Utility.getServerStoragePath(this._jettyServerModel.defaultStoragePath, serverName);
+        const jettyBase: string = vscode.workspace.rootPath ? path.join(vscode.workspace.rootPath, '/.jetty') :
+            await Utility.getServerStoragePath(this._jettyServerModel.defaultStoragePath, serverName);
         const newServer: JettyServer = new JettyServer(serverName, installPath, jettyBase);
         this._jettyServerModel.addServer(newServer);
+
+        // TODO: figure out better way, either copy the entire demo-base or 
+        // a pre-defined set of files
+        // ... 
         await Promise.all([
             fse.copy(path.join(installPath, 'demo-base', 'start.d'), path.join(jettyBase, 'start.d')),
             fse.copy(path.join(installPath, 'start.ini'), path.join(jettyBase, 'start.ini')),
             fse.copy(path.join(installPath, 'demo-base', 'etc'), path.join(jettyBase, 'etc')),
             fse.copy(path.join(this._extensionPath, 'resources', 'ROOT'), path.join(jettyBase, 'webapps', 'ROOT'))
         ]);
+
         return newServer;
     }
 
@@ -61,8 +71,23 @@ export class JettyServerController {
                 const debugPort: number = await server.getDebugPort();
                 const stopPort: number = await portfinder.getPortPromise({ port: debugPort + 1, host: '127.0.0.1' });
                 server.startArguments = ['-jar', path.join(server.installPath, 'start.jar'), `"jetty.base=${server.storagePath}"`, `"-DSTOP.PORT=${stopPort}"`, '"-DSTOP.KEY=STOP"'];
+
+                // allow passing environment vars (from workspace)
+                var options: SpawnOptions = {
+                    shell: true,
+                };
+                var settings = vscode.workspace.getConfiguration("jetty");
+                var envVars: string[] = settings.get("environmentVars");
+                envVars.forEach((env: string) => {
+                    if (!options.env) options.env = {};
+                    var index = env.indexOf('=');
+                    if (index > 0) {
+                        options.env[env.substring(0,index)] = env.substring(index+1);
+                    }
+                });
+
                 const args: string[] = debugPort ? ['-Xdebug', `-agentlib:jdwp=transport=dt_socket,address=${debugPort},server=y,suspend=n`].concat(server.startArguments) : server.startArguments;
-                const javaProcess: Promise<void> = Utility.execute(this._outputChannel, server.name, 'java', { shell: true }, ...args);
+                const javaProcess: Promise<void> = Utility.execute(this._outputChannel, server.name, 'java', options, ...args);
                 server.setStarted(true);
                 if (debugPort) {
                     this.startDebugSession(server);

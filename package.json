@@ -289,6 +289,10 @@
         "jetty.workspace": {
           "type": "string",
           "description": "Jetty Servers workspace."
+        },
+        "jetty.environmentVars": {
+          "type": "array",
+          "description": "Environment Variables for run-time"
         }
       }
     }
