@@ -283,12 +283,55 @@ export class JettyServerController {
 
     private async deployPackage(server: JettyServer, packagePath: string): Promise<void> {
         const appName: string = path.basename(packagePath, path.extname(packagePath));
-        const appPath: string = path.join(server.storagePath, 'webapps', appName);
+        
+        var folder = packagePath.substring(0, packagePath.length-4);
+        var fsStats = fse.statSync(folder);
+        if ( fsStats.isDirectory ) {
+            // FC: use folder directly (instead of copying war and exploding it)
+            await this.createWebAppDescriptorAsync(server, folder, appName);
 
-        await fse.remove(appPath);
-        await fse.mkdirs(appPath);
-        await Utility.execute(this._outputChannel, server.name, 'jar', { cwd: appPath }, 'xvf', `${packagePath}`);
+        } else {
+            // FC: original: copy/explode war inside jetty folder
+            const appPath: string = path.join(server.storagePath, 'webapps', appName);
+            await fse.remove(appPath);
+            await fse.mkdirs(appPath);
+            await Utility.execute(this._outputChannel, server.name, 'jar', { cwd: appPath }, 'xvf', `${packagePath}`);
+        }
+
         vscode.commands.executeCommand('jetty.tree.refresh');
+    }
+
+    private async createWebAppDescriptorAsync(server: JettyServer, packagePath: string, appName: string) {
+        const contextPath: string = await vscode.window.showInputBox({
+            prompt: 'context path',
+            value: appName,
+            validateInput: (name: string): string => {
+                if (!name.match(/^[\w.-]+$/)) {
+                    return 'please input a valid context path';
+                } 
+                return null;
+            }
+        });
+
+        var content: string = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+<!DOCTYPE Configure PUBLIC "-//Jetty//Configure//EN" "http://www.eclipse.org/jetty/configure_9_3.dtd">
+<Configure class="org.eclipse.jetty.webapp.WebAppContext">
+    <Set name="contextPath">/${contextPath}</Set>
+    <Set name="war">${packagePath}</Set>
+</Configure>        
+`;
+
+        // const appPath: string = path.join(server.storagePath, 'webapps', appName);
+        const appPath: string = path.join(server.storagePath, 'webapps', `${contextPath}.xml`);
+        fse.outputFileSync(appPath, content);
+        const textDocument = await vscode.workspace.openTextDocument(appPath);
+        if (!textDocument) {
+          throw new Error('Could not open file!');
+        }
+        const editor = vscode.window.showTextDocument(textDocument);
+        if (!editor) {
+          throw new Error('Could not show document!');
+        }  
     }
 
     private async precheck(server: JettyServer): Promise<JettyServer> {

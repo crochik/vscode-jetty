@@ -44,6 +44,9 @@ export class JettyServerTreeProvider implements vscode.TreeDataProvider<vscode.T
                         if (temp.isDirectory() || (temp.isFile() && fileExtension === Constants.WAR_FILE_EXTENSION)) {
                             wars.push(fileExtension === Constants.WAR_FILE_EXTENSION ? path.basename(w, fileExtension) : w);
                         }
+
+                        // Felipe: handle xml files
+                        // ...
                     }
                 });
                 await Promise.all(promises);
