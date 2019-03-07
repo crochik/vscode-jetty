@@ -1,16 +1,16 @@
 {
-  "name": "vscode-jetty",
-  "displayName": "Jetty for Java",
-  "description": "Start and run or debug your war package on Jetty.",
-  "version": "0.1.11",
+  "name": "pi-jetty",
+  "displayName": "PI Jetty",
+  "description": "Interact with Jetty Server.",
+  "version": "0.0.1",
   "icon": "resources/icon.png",
-  "publisher": "SummerSun",
+  "publisher": "Crochik",
   "engines": {
     "vscode": "^1.21.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/summersun/vscode-jetty"
+    "url": "https://github.com/crochik/vscode-jetty"
   },
   "categories": [
     "Other"
@@ -19,7 +19,7 @@
     "Java",
     "Jetty"
   ],
-  "homepage": "https://github.com/SummerSun/vscode-jetty/blob/master/README.md",
+  "homepage": "https://github.com/crochik/vscode-jetty/blob/master/README.md",
   "activationEvents": [
     "onView:jettyServerExplorer",
     "onCommand:jetty.tree.refresh",
@@ -153,14 +153,6 @@
         "category": "Jetty"
       }
     ],
-    "views": {
-      "explorer": [
-        {
-          "id": "jettyServerExplorer",
-          "name": "Jetty Servers"
-        }
-      ]
-    },
     "menus": {
       "view/title": [
         {

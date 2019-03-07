@@ -1,19 +1,19 @@
 'use strict';
 
+import { SpawnOptions } from 'child_process';
 import * as fse from 'fs-extra';
 import * as _ from "lodash";
 import * as opn from 'opn';
 import * as path from "path";
 import * as portfinder from 'portfinder';
 import { URL } from 'url';
-import * as vscode from "vscode";
 import { MessageItem } from "vscode";
+import * as vscode from "vscode";
 import * as Constants from './Constants';
 import { JettyServer } from "./JettyServer";
 import { JettyServerModel } from "./JettyServerModel";
 import * as Utility from './Utility';
 import { WarPackage } from './WarPackage';
-import { SpawnOptions } from 'child_process';
 
 export class JettyServerController {
     private _outputChannel: vscode.OutputChannel;
@@ -39,32 +39,31 @@ export class JettyServerController {
         const existingServerNames: string[] = this._jettyServerModel.getServerSet().map((item: JettyServer) => { return item.name; });
         const serverName: string = await Utility.getServerName(installPath, this._jettyServerModel.defaultStoragePath, existingServerNames);
 
-        if ( !vscode.workspace.rootPath ) {
+        if (!vscode.workspace.rootPath) {
             vscode.window.showErrorMessage('First load your workspace.');
             return;
         }
         const jettyBase: string = path.join(vscode.workspace.rootPath, '/.jetty');
-        
-        // TODO: check if the folder already exist, if so skip copying files
-        var exists = fse.existsSync(jettyBase);
-        if ( !exists ) {
+
+        const exists: boolean = fse.existsSync(jettyBase);
+        if (!exists) {
             // create webapp
-            const webAppsPath = path.join(jettyBase, 'webapps');
+            const webAppsPath: string = path.join(jettyBase, 'webapps');
             await fse.mkdirs(webAppsPath);
 
             // crate standard config
-            var startIni = `--module=server
+            const startIni: string = `--module=server
 --module=jsp
 --module=resources
 --module=deploy
 --module=jstl
 --module=websocket
 --module=http
-`
+`;
             await this.createAndOpenAsync(path.join(jettyBase, '/start.ini'), startIni);
         } else {
-            var stat = await fse.statSync(jettyBase);
-            if ( !stat.isDirectory() ) {
+            const stat: fse.Stat = await fse.statSync(jettyBase);
+            if (!stat.isDirectory()) {
                 vscode.window.showErrorMessage(`${jettyBase} is not a directory`);
                 return;
             }
@@ -72,10 +71,6 @@ export class JettyServerController {
 
         const newServer: JettyServer = new JettyServer(serverName, installPath, jettyBase);
         this._jettyServerModel.addServer(newServer);
-
-        // TODO: figure out better way, either copy the entire demo-base or 
-        // a pre-defined set of files
-        // ... 
 
         // original implementation
         // const jettyBase: string = await Utility.getServerStoragePath(this._jettyServerModel.defaultStoragePath, serverName);
@@ -102,16 +97,16 @@ export class JettyServerController {
                 server.startArguments = ['-jar', path.join(server.installPath, 'start.jar'), `"jetty.base=${server.storagePath}"`, `"-DSTOP.PORT=${stopPort}"`, '"-DSTOP.KEY=STOP"'];
 
                 // allow passing environment vars (from workspace)
-                var options: SpawnOptions = {
-                    shell: true,
+                const options: SpawnOptions = {
+                    shell: true
                 };
-                var settings = vscode.workspace.getConfiguration("jetty");
-                var envVars: string[] = settings.get("environmentVars");
+                const settings: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration('jetty');
+                const envVars: string[] = settings.get('environmentVars');
                 envVars.forEach((env: string) => {
                     if (!options.env) options.env = {};
                     var index = env.indexOf('=');
                     if (index > 0) {
-                        options.env[env.substring(0,index)] = env.substring(index+1);
+                        options.env[env.substring(0, index)] = env.substring(index + 1);
                     }
                 });
 
@@ -312,10 +307,10 @@ export class JettyServerController {
 
     private async deployPackage(server: JettyServer, packagePath: string): Promise<void> {
         const appName: string = path.basename(packagePath, path.extname(packagePath));
-        
-        var folder = packagePath.substring(0, packagePath.length-4);
-        var fsStats = fse.statSync(folder);
-        if ( fsStats.isDirectory ) {
+
+        const folder: string = packagePath.substring(0, packagePath.length - 4);
+        const fsStats: fse.Stat = fse.statSync(folder);
+        if (fsStats.isDirectory) {
             // FC: use folder directly (instead of copying war and exploding it)
             await this.createWebAppDescriptorAsync(server, folder, appName);
 
@@ -330,41 +325,41 @@ export class JettyServerController {
         vscode.commands.executeCommand('jetty.tree.refresh');
     }
 
-    private async createWebAppDescriptorAsync(server: JettyServer, packagePath: string, appName: string) {
+    private async createWebAppDescriptorAsync(server: JettyServer, packagePath: string, appName: string): Promise<void> {
         const contextPath: string = await vscode.window.showInputBox({
             prompt: 'context path',
             value: appName,
             validateInput: (name: string): string => {
                 if (!name.match(/^[\w.-]+$/)) {
                     return 'please input a valid context path';
-                } 
+                }
                 return null;
             }
         });
 
-        var content: string = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>
+        const content: string = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <!DOCTYPE Configure PUBLIC "-//Jetty//Configure//EN" "http://www.eclipse.org/jetty/configure_9_3.dtd">
 <Configure class="org.eclipse.jetty.webapp.WebAppContext">
     <Set name="contextPath">/${contextPath}</Set>
     <Set name="war">${packagePath}</Set>
-</Configure>        
+</Configure>
 `;
 
         const appPath: string = path.join(server.storagePath, 'webapps', `${contextPath}.xml`);
         await this.createAndOpenAsync(appPath, content);
     }
 
-    private async createAndOpenAsync(filePath: string, content: string) {
-        
+    private async createAndOpenAsync(filePath: string, content: string): Promise<void> {
+
         fse.outputFileSync(filePath, content);
-        const textDocument = await vscode.workspace.openTextDocument(filePath);
+        const textDocument: vscode.TextDocument = await vscode.workspace.openTextDocument(filePath);
         if (!textDocument) {
-          throw new Error('Could not open file!');
+            throw new Error('Could not open file!');
         }
-        const editor = vscode.window.showTextDocument(textDocument);
+        const editor: Thenable<vscode.TextEditor> = vscode.window.showTextDocument(textDocument);
         if (!editor) {
-          throw new Error('Could not show document!');
-        }  
+            throw new Error('Could not show document!');
+        }
     }
 
     private async precheck(server: JettyServer): Promise<JettyServer> {
