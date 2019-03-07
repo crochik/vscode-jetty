@@ -47,7 +47,8 @@ export class JettyServerModel {
         if (index > -1) {
             const oldServer: JettyServer[] = this._serverList.splice(index, 1);
             if (!_.isEmpty(oldServer)) {
-                fse.remove(server.storagePath);
+                // FC: do not delete folder
+                // fse.remove(server.storagePath);
                 this.saveServerList();
                 return true;
             }

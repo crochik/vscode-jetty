@@ -39,23 +39,52 @@ export class JettyServerController {
         const existingServerNames: string[] = this._jettyServerModel.getServerSet().map((item: JettyServer) => { return item.name; });
         const serverName: string = await Utility.getServerName(installPath, this._jettyServerModel.defaultStoragePath, existingServerNames);
 
+        if ( !vscode.workspace.rootPath ) {
+            vscode.window.showErrorMessage('First load your workspace.');
+            return;
+        }
+        const jettyBase: string = path.join(vscode.workspace.rootPath, '/.jetty');
+        
         // TODO: check if the folder already exist, if so skip copying files
-        // ...
-        // const jettyBase: string = await Utility.getServerStoragePath(this._jettyServerModel.defaultStoragePath, serverName);
-        const jettyBase: string = vscode.workspace.rootPath ? path.join(vscode.workspace.rootPath, '/.jetty') :
-            await Utility.getServerStoragePath(this._jettyServerModel.defaultStoragePath, serverName);
+        var exists = fse.existsSync(jettyBase);
+        if ( !exists ) {
+            // create webapp
+            const webAppsPath = path.join(jettyBase, 'webapps');
+            await fse.mkdirs(webAppsPath);
+
+            // crate standard config
+            var startIni = `--module=server
+--module=jsp
+--module=resources
+--module=deploy
+--module=jstl
+--module=websocket
+--module=http
+`
+            await this.createAndOpenAsync(path.join(jettyBase, '/start.ini'), startIni);
+        } else {
+            var stat = await fse.statSync(jettyBase);
+            if ( !stat.isDirectory() ) {
+                vscode.window.showErrorMessage(`${jettyBase} is not a directory`);
+                return;
+            }
+        }
+
         const newServer: JettyServer = new JettyServer(serverName, installPath, jettyBase);
         this._jettyServerModel.addServer(newServer);
 
         // TODO: figure out better way, either copy the entire demo-base or 
         // a pre-defined set of files
         // ... 
-        await Promise.all([
-            fse.copy(path.join(installPath, 'demo-base', 'start.d'), path.join(jettyBase, 'start.d')),
-            fse.copy(path.join(installPath, 'start.ini'), path.join(jettyBase, 'start.ini')),
-            fse.copy(path.join(installPath, 'demo-base', 'etc'), path.join(jettyBase, 'etc')),
-            fse.copy(path.join(this._extensionPath, 'resources', 'ROOT'), path.join(jettyBase, 'webapps', 'ROOT'))
-        ]);
+
+        // original implementation
+        // const jettyBase: string = await Utility.getServerStoragePath(this._jettyServerModel.defaultStoragePath, serverName);
+        // await Promise.all([
+        //     fse.copy(path.join(installPath, 'demo-base', 'start.d'), path.join(jettyBase, 'start.d')),
+        //     fse.copy(path.join(installPath, 'start.ini'), path.join(jettyBase, 'start.ini')),
+        //     fse.copy(path.join(installPath, 'demo-base', 'etc'), path.join(jettyBase, 'etc')),
+        //     fse.copy(path.join(this._extensionPath, 'resources', 'ROOT'), path.join(jettyBase, 'webapps', 'ROOT'))
+        // ]);
 
         return newServer;
     }
@@ -321,10 +350,14 @@ export class JettyServerController {
 </Configure>        
 `;
 
-        // const appPath: string = path.join(server.storagePath, 'webapps', appName);
         const appPath: string = path.join(server.storagePath, 'webapps', `${contextPath}.xml`);
-        fse.outputFileSync(appPath, content);
-        const textDocument = await vscode.workspace.openTextDocument(appPath);
+        await this.createAndOpenAsync(appPath, content);
+    }
+
+    private async createAndOpenAsync(filePath: string, content: string) {
+        
+        fse.outputFileSync(filePath, content);
+        const textDocument = await vscode.workspace.openTextDocument(filePath);
         if (!textDocument) {
           throw new Error('Could not open file!');
         }
