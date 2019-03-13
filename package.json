@@ -2,7 +2,7 @@
   "name": "pi-jetty",
   "displayName": "PI Jetty",
   "description": "Interact with Jetty Server.",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "icon": "resources/icon.png",
   "publisher": "Crochik",
   "engines": {
@@ -22,41 +22,21 @@
   "homepage": "https://github.com/crochik/vscode-jetty/blob/master/README.md",
   "activationEvents": [
     "onView:jettyServerExplorer",
-    "onCommand:jetty.tree.refresh",
     "onCommand:jetty.server.add",
     "onCommand:jetty.server.start",
-    "onCommand:jetty.server.start.context",
     "onCommand:jetty.server.restart",
-    "onCommand:jetty.server.restart.context",
     "onCommand:jetty.server.stop",
-    "onCommand:jetty.server.stop.context",
-    "onCommand:jetty.server.delete",
-    "onCommand:jetty.server.delete.context",
-    "onCommand:jetty.server.browse",
     "onCommand:jetty.server.debug",
     "onCommand:jetty.war.debug",
-    "onCommand:jetty.war.delete",
-    "onCommand:jetty.war.browse",
-    "onCommand:jetty.war.reveal",
-    "onCommand:jetty.war.run",
-    "onCommand:jetty.package"
+    "onCommand:jetty.war.run"
   ],
   "main": "./out/src/extension",
   "contributes": {
     "commands": [
       {
-        "command": "jetty.tree.refresh",
-        "title": "Refresh Jetty Server Tree",
-        "category": "Jetty",
-        "icon": {
-          "light": "resources/light/refresh.svg",
-          "dark": "resources/dark/refresh.svg"
-        }
-      },
-      {
         "command": "jetty.server.add",
         "title": "Add Jetty Server",
-        "category": "Jetty",
+        "category": "PI",
         "icon": {
           "light": "resources/light/add.svg",
           "dark": "resources/dark/add.svg"
@@ -65,148 +45,36 @@
       {
         "command": "jetty.server.start",
         "title": "Start Jetty Server",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.server.start.context",
-        "title": "Start",
-        "category": "Jetty"
+        "category": "PI"
       },
       {
         "command": "jetty.server.restart",
         "title": "Restart Jetty Server",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.server.restart.context",
-        "title": "Restart",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.server.rename",
-        "title": "Rename Jetty Server",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.server.rename.context",
-        "title": "Rename",
-        "category": "Jetty"
+        "category": "PI"
       },
       {
         "command": "jetty.server.stop",
         "title": "Stop Jetty Server",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.server.stop.context",
-        "title": "Stop",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.server.delete",
-        "title": "Delete Jetty Server",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.server.delete.context",
-        "title": "Delete",
-        "category": "Jetty"
+        "category": "PI"
       },
       {
         "command": "jetty.war.run",
         "title": "Run on Jetty Server",
-        "category": "Jetty"
+        "category": "PI"
       },
       {
         "command": "jetty.war.debug",
         "title": "Debug on Jetty Server",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.server.browse",
-        "title": "Open in Browser",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.war.delete",
-        "title": "Delete",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.war.reveal",
-        "title": "Reveal In Explorer",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.war.browse",
-        "title": "Open in Browser",
-        "category": "Jetty"
+        "category": "PI"
       },
       {
         "command": "jetty.server.debug",
         "title": "Debug War Package",
-        "category": "Jetty"
-      },
-      {
-        "command": "jetty.package",
-        "title": "Generate War Package from Current Folder",
-        "category": "Jetty"
+        "category": "PI"
       }
     ],
     "menus": {
-      "view/title": [
-        {
-          "command": "jetty.tree.refresh",
-          "when": "view == jettyServerExplorer",
-          "group": "navigation@0"
-        },
-        {
-          "command": "jetty.server.add",
-          "when": "view == jettyServerExplorer",
-          "group": "navigation@1"
-        }
-      ],
       "commandPalette": [
-        {
-          "command": "jetty.tree.refresh",
-          "when": "never"
-        },
-        {
-          "command": "jetty.server.start.context",
-          "when": "never"
-        },
-        {
-          "command": "jetty.server.restart.context",
-          "when": "never"
-        },
-        {
-          "command": "jetty.server.stop.context",
-          "when": "never"
-        },
-        {
-          "command": "jetty.server.delete.context",
-          "when": "never"
-        },
-        {
-          "command": "jetty.server.rename.context",
-          "when": "never"
-        },
-        {
-          "command": "jetty.server.browse",
-          "when": "never"
-        },
-        {
-          "command": "jetty.war.delete",
-          "when": "never"
-        },
-        {
-          "command": "jetty.war.browse",
-          "when": "never"
-        },
-        {
-          "command": "jetty.war.reveal",
-          "when": "never"
-        },
         {
           "command": "jetty.server.debug",
           "when": "never"
@@ -221,68 +89,16 @@
           "command": "jetty.war.debug",
           "when": "explorerResourceIsFolder == false && resourceExtname == .war"
         }
-      ],
-      "view/item/context": [
-        {
-          "command": "jetty.server.start.context",
-          "when": "view == jettyServerExplorer && viewItem == idleserver",
-          "group": "jetty@0"
-        },
-        {
-          "command": "jetty.server.stop.context",
-          "when": "view == jettyServerExplorer && viewItem == runningserver",
-          "group": "jetty@1"
-        },
-        {
-          "command": "jetty.server.restart.context",
-          "when": "view == jettyServerExplorer && viewItem == runningserver",
-          "group": "jetty@2"
-        },
-        {
-          "command": "jetty.server.rename.context",
-          "when": "view == jettyServerExplorer && viewItem && viewItem != war",
-          "group": "jetty@3"
-        },
-        {
-          "command": "jetty.server.browse",
-          "when": "view == jettyServerExplorer && viewItem && viewItem != war",
-          "group": "jetty@4"
-        },
-        {
-          "command": "jetty.server.debug",
-          "when": "view == jettyServerExplorer && viewItem && viewItem != war",
-          "group": "jetty@5"
-        },
-        {
-          "command": "jetty.war.browse",
-          "when": "view == jettyServerExplorer && viewItem == war",
-          "group": "war@0"
-        },
-        {
-          "command": "jetty.war.reveal",
-          "when": "view == jettyServerExplorer && viewItem == war",
-          "group": "war@1"
-        },
-        {
-          "command": "jetty.war.delete",
-          "when": "view == jettyServerExplorer && viewItem == war",
-          "group": "war@2"
-        },
-        {
-          "command": "jetty.server.delete.context",
-          "when": "view == jettyServerExplorer && viewItem && viewItem != war",
-          "group": "jetty@10"
-        }
       ]
     },
     "configuration": {
-      "title": "Jetty Configuration",
+      "title": "PI - Jetty Configuration",
       "properties": {
-        "jetty.workspace": {
+        "pi.jetty.server.installPath": {
           "type": "string",
-          "description": "Jetty Servers workspace."
+          "description": "Jetty Server Path"
         },
-        "jetty.environmentVars": {
+        "pi.jetty.environmentVars": {
           "type": "array",
           "description": "Environment Variables for run-time"
         }

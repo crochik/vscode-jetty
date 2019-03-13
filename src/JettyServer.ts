@@ -1,29 +1,21 @@
 'use strict';
-import * as path from 'path';
 import * as vscode from "vscode";
 import * as Constants from './Constants';
 
-export class JettyServer extends vscode.TreeItem implements vscode.QuickPickItem {
-    public label: string;
-    public description: string;
-    public detail?: string;
+export class JettyServer  {
     public startArguments: string[];
     public state: Constants.SERVER_STATE;
     public restart: boolean = false;
-    public basePathName: string;
     private _isDebugging: boolean = false;
     private _debugPort: number;
     private _debugWorkspace: vscode.WorkspaceFolder;
 
-    constructor(public name: string, public installPath: string, public storagePath: string) {
-        super(name);
+    constructor(public installPath: string) {
         this.state = Constants.SERVER_STATE.IdleServer;
-        this.basePathName = path.basename(storagePath);
     }
 
     public setStarted(running: boolean): void {
         this.state = running ? Constants.SERVER_STATE.RunningServer : Constants.SERVER_STATE.IdleServer;
-        vscode.commands.executeCommand('jetty.tree.refresh');
     }
 
     public isRunning(): boolean {
@@ -52,10 +44,5 @@ export class JettyServer extends vscode.TreeItem implements vscode.QuickPickItem
 
     public getDebugPort(): number {
         return this._debugPort;
-    }
-
-    public rename(newName: string): void {
-        this.name = newName;
-        this.label = newName;
     }
 }

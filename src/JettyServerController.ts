@@ -6,45 +6,24 @@ import * as _ from "lodash";
 import * as opn from 'opn';
 import * as path from "path";
 import * as portfinder from 'portfinder';
-import { URL } from 'url';
-import { MessageItem } from "vscode";
 import * as vscode from "vscode";
 import * as Constants from './Constants';
 import { JettyServer } from "./JettyServer";
 import { JettyServerModel } from "./JettyServerModel";
 import * as Utility from './Utility';
-import { WarPackage } from './WarPackage';
 
 export class JettyServerController {
     private _outputChannel: vscode.OutputChannel;
     constructor(private _jettyServerModel: JettyServerModel, private _extensionPath: string) {
-        this._outputChannel = vscode.window.createOutputChannel('vscode-jetty');
+        this._outputChannel = vscode.window.createOutputChannel('ProgramInterface.com - Jetty');
     }
 
-    public async addServer(): Promise<JettyServer> {
-        const pathPick: vscode.Uri[] = await vscode.window.showOpenDialog({
-            defaultUri: vscode.workspace.rootPath ? vscode.Uri.file(vscode.workspace.rootPath) : undefined,
-            canSelectFiles: false,
-            canSelectFolders: true,
-            openLabel: Constants.SELECT_JETTY_DIRECTORY
-        });
-        if (_.isEmpty(pathPick) || !pathPick[0].fsPath) {
-            return;
-        }
-        const installPath: string = pathPick[0].fsPath;
-        if (!await Utility.validateInstallPath(installPath)) {
-            vscode.window.showErrorMessage('The selected directory is not a valid Jetty server direcotry');
-            return;
-        }
-        const existingServerNames: string[] = this._jettyServerModel.getServerSet().map((item: JettyServer) => { return item.name; });
-        const serverName: string = await Utility.getServerName(installPath, this._jettyServerModel.defaultStoragePath, existingServerNames);
-
+    public async getRootPath(): Promise<string | undefined> {
         if (!vscode.workspace.rootPath) {
             vscode.window.showErrorMessage('First load your workspace.');
             return;
         }
         const jettyBase: string = path.join(vscode.workspace.rootPath, '/.jetty');
-
         const exists: boolean = fse.existsSync(jettyBase);
         if (!exists) {
             // create webapp
@@ -69,82 +48,99 @@ export class JettyServerController {
             }
         }
 
-        const newServer: JettyServer = new JettyServer(serverName, installPath, jettyBase);
-        this._jettyServerModel.addServer(newServer);
+        return jettyBase;
+    }
 
-        // original implementation
-        // const jettyBase: string = await Utility.getServerStoragePath(this._jettyServerModel.defaultStoragePath, serverName);
-        // await Promise.all([
-        //     fse.copy(path.join(installPath, 'demo-base', 'start.d'), path.join(jettyBase, 'start.d')),
-        //     fse.copy(path.join(installPath, 'start.ini'), path.join(jettyBase, 'start.ini')),
-        //     fse.copy(path.join(installPath, 'demo-base', 'etc'), path.join(jettyBase, 'etc')),
-        //     fse.copy(path.join(this._extensionPath, 'resources', 'ROOT'), path.join(jettyBase, 'webapps', 'ROOT'))
-        // ]);
+    public async addServer(): Promise<JettyServer> {
+        const existingServer: JettyServer | undefined = await this._jettyServerModel.getJettyServer();
+        const defaultUri: vscode.Uri = existingServer ? vscode.Uri.file(existingServer.installPath) :
+            (vscode.workspace.rootPath ? vscode.Uri.file(vscode.workspace.rootPath) : undefined);
+
+        const pathPick: vscode.Uri[] = await vscode.window.showOpenDialog({
+            defaultUri,
+            canSelectFiles: false,
+            canSelectFolders: true,
+            openLabel: Constants.SELECT_JETTY_DIRECTORY
+        });
+        if (_.isEmpty(pathPick) || !pathPick[0].fsPath) {
+            return;
+        }
+        const installPath: string = pathPick[0].fsPath;
+        if (!await Utility.validateInstallPath(installPath)) {
+            vscode.window.showErrorMessage('The selected directory is not a valid Jetty server direcotry');
+            return;
+        }
+
+        const newServer: JettyServer = new JettyServer(installPath);
+        await this._jettyServerModel.addServer(newServer);
 
         return newServer;
     }
 
-    public async startServer(server: JettyServer): Promise<void> {
-        server = server ? server : await this.selectServer(true);
-        if (server) {
-            if (server.isRunning()) {
-                vscode.window.showInformationMessage(Constants.SERVER_RUNNING);
+    public async startServer(): Promise<void> {
+        let server: JettyServer | undefined = await this._jettyServerModel.getJettyServer();
+        if (!server) {
+            server = await this.addServer();
+            if (!server) {
+                // operation aborted
                 return;
             }
-            try {
-                const debugPort: number = await server.getDebugPort();
-                const stopPort: number = await portfinder.getPortPromise({ port: debugPort + 1, host: '127.0.0.1' });
-                server.startArguments = ['-jar', path.join(server.installPath, 'start.jar'), `"jetty.base=${server.storagePath}"`, `"-DSTOP.PORT=${stopPort}"`, '"-DSTOP.KEY=STOP"'];
-
-                // allow passing environment vars (from workspace)
-                const options: SpawnOptions = {
-                    shell: true
-                };
-                const settings: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration('jetty');
-                const envVars: string[] = settings.get('environmentVars');
-                envVars.forEach((env: string) => {
-                    if (!options.env) options.env = {};
-                    var index = env.indexOf('=');
-                    if (index > 0) {
-                        options.env[env.substring(0, index)] = env.substring(index + 1);
-                    }
-                });
-
-                const args: string[] = debugPort ? ['-Xdebug', `-agentlib:jdwp=transport=dt_socket,address=${debugPort},server=y,suspend=n`].concat(server.startArguments) : server.startArguments;
-                const javaProcess: Promise<void> = Utility.execute(this._outputChannel, server.name, 'java', options, ...args);
-                server.setStarted(true);
-                if (debugPort) {
-                    this.startDebugSession(server);
-                }
-                await javaProcess;
-                server.setStarted(false);
-                if (server.restart) {
-                    server.restart = false;
-                    await this.startServer(server);
-                }
-            } catch (err) {
-                server.setStarted(false);
-                vscode.window.showErrorMessage(err.toString());
-            }
         }
+
+        if (server.isRunning()) {
+            vscode.window.showInformationMessage(Constants.SERVER_RUNNING);
+            return;
+        }
+        try {
+            const debugPort: number = await server.getDebugPort();
+            const stopPort: number = await portfinder.getPortPromise({ port: debugPort + 1, host: '127.0.0.1' });
+            const rootPath: string = await this.getRootPath();
+            if (!rootPath) {
+                return;
+            }
+
+            server.startArguments = ['-jar', path.join(server.installPath, 'start.jar'), `"jetty.base=${rootPath}"`, `"-DSTOP.PORT=${stopPort}"`, '"-DSTOP.KEY=STOP"'];
+
+            // allow passing environment vars (from workspace)
+            const options: SpawnOptions = {
+                shell: true
+            };
+            const settings: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration('pi.jetty');
+
+            // tslint:disable-next-line:no-backbone-get-set-outside-model
+            const envVars: string[] = settings.get('environmentVars');
+            envVars.forEach((env: string) => {
+                if (!options.env) {
+                    options.env = {};
+                }
+                const index: number = env.indexOf('=');
+                if (index > 0) {
+                    options.env[env.substring(0, index)] = env.substring(index + 1);
+                }
+            });
+
+            const args: string[] = debugPort ? ['-Xdebug', `-agentlib:jdwp=transport=dt_socket,address=${debugPort},server=y,suspend=n`].concat(server.startArguments) : server.startArguments;
+            const javaProcess: Promise<void> = Utility.execute(this._outputChannel, 'jetty', 'java', options, ...args);
+            server.setStarted(true);
+            if (debugPort) {
+                this.startDebugSession(server);
+            }
+            await javaProcess;
+            server.setStarted(false);
+            if (server.restart) {
+                server.restart = false;
+                await this.startServer();
+            }
+        } catch (err) {
+            server.setStarted(false);
+            vscode.window.showErrorMessage(err.toString());
+        }
+
     }
 
-    public async deleteServer(server: JettyServer): Promise<void> {
-        server = await this.precheck(server);
-        if (server) {
-            if (server.isRunning()) {
-                const confirmation: MessageItem = await vscode.window.showWarningMessage(Constants.DELETE_CONFIRM, Constants.YES, Constants.CANCEL);
-                if (confirmation !== Constants.YES) {
-                    return;
-                }
-                await this.stopServer(server);
-            }
-            this._jettyServerModel.deleteServer(server);
-        }
-    }
+    public async stopServer(restart?: boolean): Promise<void> {
+        const server: JettyServer | undefined = await this._jettyServerModel.getJettyServer();
 
-    public async stopServer(server: JettyServer, restart?: boolean): Promise<void> {
-        server = await this.precheck(server);
         if (server) {
             if (!server.isRunning()) {
                 vscode.window.showInformationMessage(Constants.SERVER_STOPPED);
@@ -154,43 +150,42 @@ export class JettyServerController {
                 server.clearDebugInfo();
             }
             server.restart = restart;
-            await Utility.execute(this._outputChannel, server.name, 'java', { shell: true }, ...server.startArguments.concat('--stop'));
+            await Utility.execute(this._outputChannel, 'jetty', 'java', { shell: true }, ...server.startArguments.concat('--stop'));
         }
     }
-    public async runWarPackage(uri: vscode.Uri, debug?: boolean, server?: JettyServer): Promise<void> {
-        if (!uri) {
-            const dialog: vscode.Uri[] = await vscode.window.showOpenDialog({
-                defaultUri: vscode.workspace.rootPath ? vscode.Uri.file(vscode.workspace.rootPath) : undefined,
-                canSelectFiles: true,
-                canSelectFolders: false,
-                openLabel: Constants.SELECT_WAR_PACKAGE
-            });
-            if (_.isEmpty(dialog) || !dialog[0].fsPath) {
+
+    public async runWarPackage(uri: vscode.Uri, debug?: boolean): Promise<void> {
+        let server: JettyServer | undefined = await this._jettyServerModel.getJettyServer();
+        if (!server) {
+            server = await this.addServer();
+            if (!server) {
                 return;
             }
-            uri = dialog[0];
         }
 
-        const packagePath: string = uri.fsPath;
-        if (!server) {
-            server = await this.selectServer(true);
+        let packagePath: string | undefined;
+        if (uri) {
+            packagePath = uri.fsPath;
+            await this.deployPackage(packagePath);
         }
-        if (!server) {
-            return;
-        }
-        await this.deployPackage(server, packagePath);
+
         if (server.isRunning() && ((!server.isDebugging() && !debug) || server.isDebugging() === debug)) {
             return;
         }
+
         let port: number;
-        let workspaceFolder: vscode.WorkspaceFolder;
+        let workspaceFolder: vscode.WorkspaceFolder | undefined;
 
         if (debug) {
             if (vscode.workspace.workspaceFolders) {
-                workspaceFolder = vscode.workspace.workspaceFolders.find((f: vscode.WorkspaceFolder): boolean => {
-                    const relativePath: string = path.relative(f.uri.fsPath, packagePath);
-                    return relativePath === '' || (!relativePath.startsWith('..') && relativePath !== packagePath);
-                });
+                if (packagePath) {
+                    workspaceFolder = vscode.workspace.workspaceFolders.find((f: vscode.WorkspaceFolder): boolean => {
+                        const relativePath: string = path.relative(f.uri.fsPath, packagePath);
+                        return relativePath === '' || (!relativePath.startsWith('..') && relativePath !== packagePath);
+                    });
+                } else if (vscode.workspace.workspaceFolders.length === 1) {
+                    workspaceFolder = vscode.workspace.workspaceFolders[0];
+                }
             }
             if (!workspaceFolder) {
                 vscode.window.showErrorMessage(Constants.NO_PACKAGE);
@@ -201,93 +196,17 @@ export class JettyServerController {
 
         server.setDebugInfo(debug, port, workspaceFolder);
         if (server.isRunning()) {
-            await this.stopServer(server, true);
+            await this.stopServer(true);
         } else {
-            await this.startServer(server);
+            await this.startServer();
         }
     }
 
-    public async browseServer(server: JettyServer): Promise<void> {
-        if (server) {
-            if (!server.isRunning()) {
-                const result: MessageItem = await vscode.window.showInformationMessage(Constants.START_SERVER, Constants.YES, Constants.NO);
-                if (result !== Constants.YES) {
-                    return;
-                }
-                this.startServer(server);
-            }
-            const httpPort: string = await Utility.getConfig(server.storagePath, 'http.ini', 'jetty.http.port');
-            opn(new URL(`${Constants.LOCALHOST}:${httpPort}`).toString());
-        }
-    }
-
-    public async renameServer(server: JettyServer): Promise<void> {
-        server = await this.precheck(server);
-        if (server) {
-            const newName: string = await vscode.window.showInputBox({
-                prompt: 'input a new server name',
-                validateInput: (name: string): string => {
-                    if (!name.match(/^[\w.-]+$/)) {
-                        return 'please input a valid server name';
-                    } else if (this._jettyServerModel.getJettyServer(name)) {
-                        return 'the name was already taken, please re-input';
-                    }
-                    return null;
-                }
-            });
-            if (newName) {
-                server.rename(newName);
-                await this._jettyServerModel.saveServerList();
-            }
-        }
-    }
-
-    public async deleteWarPackage(warPackage: WarPackage): Promise<void> {
-        if (warPackage) {
-            await fse.remove(warPackage.storagePath);
-            await fse.remove(`${warPackage.storagePath}.war`);
-            vscode.commands.executeCommand('jetty.tree.refresh');
-        }
-    }
-
-    public revealWarPackage(warPackage: WarPackage): void {
-        if (warPackage) {
-            opn(warPackage.storagePath);
-        }
-    }
-
-    public async browseWarPackage(warPackage: WarPackage): Promise<void> {
-        if (warPackage) {
-            const server: JettyServer = this._jettyServerModel.getJettyServer(warPackage.serverName);
-            const httpPort: string = await Utility.getConfig(server.storagePath, 'http.ini', 'jetty.http.port');
-            if (!httpPort) {
-                vscode.window.showErrorMessage(Constants.HTTP_PORT_UNDEFINED);
-                return;
-            }
-            if (!server.isRunning()) {
-                const result: MessageItem = await vscode.window.showInformationMessage(Constants.START_SERVER, Constants.YES, Constants.NO);
-                if (result === Constants.YES) {
-                    this.startServer(server);
-                }
-            }
-            opn(new URL(warPackage.label, `${Constants.LOCALHOST}:${httpPort}`).toString());
-        }
-    }
-
-    public async generateWarPackage(): Promise<void> {
-        const name: string = vscode.workspace.name;
-        await Utility.execute(this._outputChannel, undefined, 'jar', { cwd: vscode.workspace.rootPath, shell: true }, 'cvf', ...[`"${name}.war"`, '*']);
-    }
-
-    // tslint:disable-next-line:no-empty
     public dispose(): void {
-        this._jettyServerModel.getServerSet().forEach((element: JettyServer) => {
-            if (element.isRunning()) {
-                this.stopServer(element);
-            }
-            this._outputChannel.dispose();
-        });
-        this._jettyServerModel.saveServerListSync();
+        if (this._jettyServerModel.isServerRunning()) {
+            this.stopServer();
+        }
+        this._outputChannel.dispose();
     }
 
     private startDebugSession(server: JettyServer): void {
@@ -296,7 +215,7 @@ export class JettyServerController {
         }
         const config: vscode.DebugConfiguration = {
             type: 'java',
-            name: `${Constants.DEBUG_SESSION_NAME}_${server.basePathName}`,
+            name: `${Constants.DEBUG_SESSION_NAME}`, // basePathName
             request: 'attach',
             hostName: 'localhost',
             port: server.getDebugPort()
@@ -305,32 +224,34 @@ export class JettyServerController {
         setTimeout(() => vscode.debug.startDebugging(server.getDebugWorkspace(), config), 500);
     }
 
-    private async deployPackage(server: JettyServer, packagePath: string): Promise<void> {
+    private async deployPackage(packagePath: string): Promise<void> {
         const appName: string = path.basename(packagePath, path.extname(packagePath));
 
         const folder: string = packagePath.substring(0, packagePath.length - 4);
         const fsStats: fse.Stat = fse.statSync(folder);
         if (fsStats.isDirectory) {
             // FC: use folder directly (instead of copying war and exploding it)
-            await this.createWebAppDescriptorAsync(server, folder, appName);
+            await this.createWebAppDescriptorAsync(folder, appName);
 
         } else {
             // FC: original: copy/explode war inside jetty folder
-            const appPath: string = path.join(server.storagePath, 'webapps', appName);
+            const rootPath: string | undefined = await this.getRootPath();
+            if (!rootPath) {
+                return;
+            }
+            const appPath: string = path.join(rootPath, 'webapps', appName);
             await fse.remove(appPath);
             await fse.mkdirs(appPath);
-            await Utility.execute(this._outputChannel, server.name, 'jar', { cwd: appPath }, 'xvf', `${packagePath}`);
+            await Utility.execute(this._outputChannel, 'jetty', 'jar', { cwd: appPath }, 'xvf', `${packagePath}`);
         }
-
-        vscode.commands.executeCommand('jetty.tree.refresh');
     }
 
-    private async createWebAppDescriptorAsync(server: JettyServer, packagePath: string, appName: string): Promise<void> {
+    private async createWebAppDescriptorAsync(packagePath: string, appName: string): Promise<void> {
         const contextPath: string = await vscode.window.showInputBox({
             prompt: 'context path',
-            value: appName,
+            value: `/${appName}`,
             validateInput: (name: string): string => {
-                if (!name.match(/^[\w.-]+$/)) {
+                if (!name.match(/^\/[\w.-]*$/)) {
                     return 'please input a valid context path';
                 }
                 return null;
@@ -340,12 +261,16 @@ export class JettyServerController {
         const content: string = `<?xml version=\"1.0\" encoding=\"UTF-8\"?>
 <!DOCTYPE Configure PUBLIC "-//Jetty//Configure//EN" "http://www.eclipse.org/jetty/configure_9_3.dtd">
 <Configure class="org.eclipse.jetty.webapp.WebAppContext">
-    <Set name="contextPath">/${contextPath}</Set>
+    <Set name="contextPath">${contextPath}</Set>
     <Set name="war">${packagePath}</Set>
 </Configure>
 `;
 
-        const appPath: string = path.join(server.storagePath, 'webapps', `${contextPath}.xml`);
+        const rootPath: string | undefined = await this.getRootPath();
+        if (!rootPath) {
+            return;
+        }
+        const appPath: string = path.join(rootPath, 'webapps', `${appName}.xml`);
         await this.createAndOpenAsync(appPath, content);
     }
 
@@ -361,36 +286,4 @@ export class JettyServerController {
             throw new Error('Could not show document!');
         }
     }
-
-    private async precheck(server: JettyServer): Promise<JettyServer> {
-        if (_.isEmpty(this._jettyServerModel.getServerSet())) {
-            vscode.window.showInformationMessage(Constants.NO_SERVER);
-            return;
-        }
-        return server ? server : await this.selectServer();
-    }
-
-    private async selectServer(createIfNoneServer: boolean = false): Promise<JettyServer> {
-        let items: vscode.QuickPickItem[] = this._jettyServerModel.getServerSet();
-        if (_.isEmpty(items) && !createIfNoneServer) {
-            return;
-        }
-        if (items.length === 1) {
-            return <JettyServer>items[0];
-        }
-        items = createIfNoneServer ? items.concat({ label: `$(plus) ${Constants.ADD_SERVER}`, description: '' }) : items;
-        const pick: vscode.QuickPickItem = await vscode.window.showQuickPick(
-            items,
-            { placeHolder: createIfNoneServer && items.length === 1 ? Constants.ADD_SERVER : Constants.SELECT_SERVER }
-        );
-
-        if (pick) {
-            if (pick instanceof JettyServer) {
-                return pick;
-            } else {
-                return await this.addServer();
-            }
-        }
-    }
-
 }

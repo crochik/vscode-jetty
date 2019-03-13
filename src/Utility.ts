@@ -17,6 +17,14 @@ export async function validateInstallPath(installPath: string): Promise<boolean>
 export async function execute(outputChannel: vscode.OutputChannel, prefix: string, command: string, options: child_process.SpawnOptions, ...args: string[]): Promise<void> {
     await new Promise((resolve: () => void, reject: (e: Error) => void): void => {
         outputChannel.show();
+        let str: string = `${command}`;
+        if (args && args.length > 0) {
+            args.forEach((arg: string) => str += ` ${arg}`);
+        }
+        outputChannel.appendLine('-'.repeat(str.length));
+        outputChannel.appendLine(str);
+        outputChannel.appendLine('-'.repeat(str.length));
+
         let stderr: string = '';
         const p: child_process.ChildProcess = child_process.spawn(command, args, options);
         p.stdout.on('data', (data: string | Buffer): void =>
@@ -48,23 +56,6 @@ export async function getConfig(storagePath: string, file: string, key: string):
     return result ? result : '8080';
 }
 
-export async function getServerName(installPath: string, defaultStoragePath: string, existingServerNames: string[]): Promise<string> {
-    const workspace: string = await getWorkspace(defaultStoragePath);
-    await fse.ensureDir(workspace);
-    const fileNames: string[] = await fse.readdir(workspace);
-    let serverName: string = path.basename(installPath);
-    let index: number = 1;
-    while (fileNames.indexOf(serverName) >= 0 || existingServerNames.indexOf(serverName) >= 0) {
-        serverName = path.basename(installPath).concat(`-${index}`);
-        index += 1;
-    }
-    return serverName;
-}
-
-export async function getServerStoragePath(defaultStoragePath: string, serverName: string): Promise<string> {
-    return path.join(await getWorkspace(defaultStoragePath), serverName);
-}
-
 export function getTempStoragePath(): string {
     const chars: string[] = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'];
     let result: string = '';
@@ -74,17 +65,4 @@ export function getTempStoragePath(): string {
         result += chars[idx];
     }
     return path.resolve(os.tmpdir(), `vscodejetty_${result}`);
-}
-
-async function getWorkspace(defaultStoragePath: string): Promise<string> {
-    const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration('jetty');
-    if (config) {
-        // tslint:disable-next-line:no-backbone-get-set-outside-model
-        const workspace: string = config.get<string>('workspace');
-        if (workspace && workspace !== '') {
-            await fse.ensureDir(workspace);
-            return workspace;
-        }
-    }
-    return path.join(defaultStoragePath, 'jetty');
 }
